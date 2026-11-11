@@ -85,9 +85,21 @@ class HealthController
 		if (array_key_exists ("target", $input)) {
 			$target = $input['target'];
 
-			exec ("ping -c 4 " . $target, $output, $ret_var);
+			// Only accept a plain IP address or hostname (allowlist), never shell syntax
+			$valid_target = is_string ($target) && $target !== "" && (
+				filter_var ($target, FILTER_VALIDATE_IP) !== false ||
+				filter_var ($target, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false
+			);
 
-			if ($ret_var == 0) {
+			$ret_var = 1;
+			if ($valid_target) {
+				exec ("ping -c 4 " . escapeshellarg ($target), $output, $ret_var);
+			}
+
+			if (!$valid_target) {
+				$response['status_code_header'] = 'HTTP/1.1 422 Unprocessable Entity';
+				$response['body'] = json_encode (array ("status" => "Invalid target"));
+			} elseif ($ret_var == 0) {
 				$response['status_code_header'] = 'HTTP/1.1 200 OK';
 				$response['body'] = json_encode (array ("status" => "OK"));
 			} else {

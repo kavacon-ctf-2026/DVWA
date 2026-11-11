@@ -218,11 +218,10 @@ class UserController
 			$gc->processRequest();
 			exit();
 		}
+		// Only the explicitly allowed field (name) may be updated; privilege
+		// fields such as "level" are ignored to prevent mass assignment.
 		if (array_key_exists ("name", $input)) {
-			$this->data[$id]->name = $input['name'];
-		}
-		if (array_key_exists ("level", $input)) {
-			$this->data[$id]->level = intval ($input['level']);
+			$this->data[$id]->name = (string) $input['name'];
 		}
 		$response['status_code_header'] = 'HTTP/1.1 200 OK';
 		$response['body'] = json_encode ($this->data[$id]->toArray($this->version));

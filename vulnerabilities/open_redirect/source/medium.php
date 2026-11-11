@@ -1,14 +1,20 @@
 <?php
 
 if (array_key_exists ("redirect", $_GET) && $_GET['redirect'] != "") {
-	if (preg_match ("/http:\/\/|https:\/\//i", $_GET['redirect'])) {
-		http_response_code (500);
+	$target = $_GET['redirect'];
+	// Only allow local (relative) targets: no scheme, no scheme-relative "//",
+	// no backslashes, whitespace or control characters
+	if (!is_string ($target)
+		|| preg_match ('/[\x00-\x20\x7f\\\\]/', $target)
+		|| substr ($target, 0, 2) === "//"
+		|| preg_match ('/^[a-z][a-z0-9+.\-]*:/i', $target)) {
+		http_response_code (400);
 		?>
 		<p>Absolute URLs not allowed.</p>
 		<?php
 		exit;
 	} else {
-		header ("location: " . $_GET['redirect']);
+		header ("location: " . $target);
 		exit;
 	}
 }

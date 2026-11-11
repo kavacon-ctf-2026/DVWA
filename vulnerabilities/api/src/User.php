@@ -38,11 +38,11 @@ final class User
 	public function toArray($version) {
 		switch ($version) {
 			case 1:
+				// Never expose credential material (password hashes) in any API version
 				$a = array (
 					"id" => $this->id,
 					"name" => $this->name,
 					"level" => $this->level,
-					"password" => $this->password,
 				);
 				break;
 			default:

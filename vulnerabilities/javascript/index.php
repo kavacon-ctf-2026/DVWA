@@ -30,31 +30,40 @@ switch( dvwaSecurityLevelGet() ) {
 }
 
 $message = "";
+
+// Tokens must never be derivable on the client. A per-session secret that only
+// the server knows is used to compute the expected token (HMAC of the phrase),
+// so a token reproduced from the JavaScript algorithm is never accepted.
+if (!isset($_SESSION['javascript_token_secret']) || !is_string($_SESSION['javascript_token_secret'])) {
+	$_SESSION['javascript_token_secret'] = bin2hex(random_bytes(32));
+}
+
 // Check what was sent in to see if it was what was expected
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
-	if (array_key_exists ("phrase", $_POST) && array_key_exists ("token", $_POST)) {
+	if (array_key_exists ("phrase", $_POST) && array_key_exists ("token", $_POST) && is_string($_POST['phrase']) && is_string($_POST['token'])) {
 
 		$phrase = $_POST['phrase'];
 		$token = $_POST['token'];
+		$expectedToken = hash_hmac("sha256", $phrase, $_SESSION['javascript_token_secret']);
 
 		if ($phrase == "success") {
 			switch( dvwaSecurityLevelGet() ) {
 				case 'low':
-					if ($token == md5(str_rot13("success"))) {
+					if (hash_equals($expectedToken, $token)) {
 						$message = "<p style='color:red'>Well done!</p>";
 					} else {
 						$message = "<p>Invalid token.</p>";
 					}
 					break;
 				case 'medium':
-					if ($token == strrev("XXsuccessXX")) {
+					if (hash_equals($expectedToken, $token)) {
 						$message = "<p style='color:red'>Well done!</p>";
 					} else {
 						$message = "<p>Invalid token.</p>";
 					}
 					break;
 				case 'high':
-					if ($token == hash("sha256", hash("sha256", "XX" . strrev("success")) . "ZZ")) {
+					if (hash_equals($expectedToken, $token)) {
 						$message = "<p style='color:red'>Well done!</p>";
 					} else {
 						$message = "<p>Invalid token.</p>";

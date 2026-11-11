@@ -1,19 +1,17 @@
 <?php
 
-$headerCSP = "Content-Security-Policy: script-src 'self' 'unsafe-inline' 'nonce-TmV2ZXIgZ29pbmcgdG8gZ2l2ZSB5b3UgdXA=';";
+// Fresh, unpredictable nonce for every response and no 'unsafe-inline'
+$cspNonce = base64_encode( random_bytes( 16 ) );
+$headerCSP = "Content-Security-Policy: script-src 'self' 'nonce-" . $cspNonce . "'; object-src 'none'; base-uri 'self';";
 
 header($headerCSP);
-
-// Disable XSS protections so that inline alert boxes will work
-header ("X-XSS-Protection: 0");
-
-# <script nonce="TmV2ZXIgZ29pbmcgdG8gZ2l2ZSB5b3UgdXA=">alert(1)</script>
 
 ?>
 <?php
 if (isset ($_POST['include'])) {
+// User input is output-encoded so it can never inject markup or script
 $page[ 'body' ] .= "
-	" . $_POST['include'] . "
+	" . htmlspecialchars( (string) $_POST['include'], ENT_QUOTES, 'UTF-8' ) . "
 ";
 }
 $page[ 'body' ] .= '

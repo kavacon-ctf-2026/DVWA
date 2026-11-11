@@ -1,13 +1,25 @@
 <?php
 function decrypt ($ciphertext, $key) {
-	$e = openssl_decrypt($ciphertext, 'aes-128-ecb', $key, OPENSSL_PKCS1_PADDING);
+	// Authenticated encryption (AES-256-GCM) instead of ECB: blocks cannot be
+	// cut, pasted or forged without the key. Token layout: IV (12) || tag (16) || ciphertext.
+	if (!is_string ($ciphertext) || strlen ($ciphertext) < 29) {
+		throw new Exception ("Token is in wrong format");
+	}
+	$iv   = substr ($ciphertext, 0, 12);
+	$tag  = substr ($ciphertext, 12, 16);
+	$text = substr ($ciphertext, 28);
+	$e = openssl_decrypt($text, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
 	if ($e === false) {
 		throw new Exception ("Decryption failed");
 	}
 	return $e;
 }
 
-$key = "ik ben een aardbei";
+// No hardcoded key: use a random secret key held server-side in the session.
+if (!isset ($_SESSION['crypto_medium_key']) || !is_string ($_SESSION['crypto_medium_key']) || strlen ($_SESSION['crypto_medium_key']) != 64) {
+	$_SESSION['crypto_medium_key'] = bin2hex (random_bytes (32));
+}
+$key = hex2bin ($_SESSION['crypto_medium_key']);
 
 $errors = "";
 $success = "";
@@ -19,17 +31,17 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 			throw new Exception ("No token passed");
 		} else {
 			$token = $_POST['token'];
-			if (strlen($token) % 32 != 0) {
+			if (!is_string ($token) || $token === "" || strlen($token) % 2 != 0 || !ctype_xdigit ($token)) {
 				throw new Exception ("Token is in wrong format");
 			} else {
 				$decrypted = decrypt(hex2bin ($token), $key);
 
 				$user = json_decode ($decrypted);
-				if ($user === null) {
+				if (!is_object ($user) || !isset ($user->user, $user->ex, $user->level)) {
 					throw new Exception ("Could not decode JSON object.");
 				}
 
-				if ($user->user == "sweep" && $user->ex > time() && $user->level == "admin") {
+				if ($user->user === "sweep" && $user->ex > time() && $user->level === "admin") {
 					$success = "Welcome administrator Sweep";
 				} else {
 					$messages = "Login successful but not as the right user.";

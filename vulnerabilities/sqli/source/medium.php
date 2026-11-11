@@ -4,15 +4,25 @@ if( isset( $_POST[ 'Submit' ] ) ) {
 	// Get input
 	$id = $_POST[ 'id' ];
 
-	$id = mysqli_real_escape_string($GLOBALS["___mysqli_ston"], $id);
+	// Only accept a numeric user ID; escaping alone does not protect an unquoted numeric field
+	$db_engine = $_DVWA['SQLI_DB'];
+	if( !is_numeric( $id ) ) {
+		$db_engine = '';
+		$html .= '<pre>User ID must be a number.</pre>';
+	}
+	else {
+		$id = intval( $id );
+	}
 
-	switch ($_DVWA['SQLI_DB']) {
+	switch ($db_engine) {
 		case MYSQL:
-			$query  = "SELECT first_name, last_name FROM users WHERE user_id = $id;";
-			$result = mysqli_query($GLOBALS["___mysqli_ston"], $query) or die( '<pre>' . mysqli_error($GLOBALS["___mysqli_ston"]) . '</pre>' );
+			// Check database using a prepared statement (parameterised query)
+			$data = $db->prepare( 'SELECT first_name, last_name FROM users WHERE user_id = (:id);' );
+			$data->bindParam( ':id', $id, PDO::PARAM_INT );
+			$data->execute();
 
 			// Get results
-			while( $row = mysqli_fetch_assoc( $result ) ) {
+			while( $row = $data->fetch( PDO::FETCH_ASSOC ) ) {
 				// Display values
 				$first = $row["first_name"];
 				$last  = $row["last_name"];
@@ -24,10 +34,10 @@ if( isset( $_POST[ 'Submit' ] ) ) {
 		case SQLITE:
 			global $sqlite_db_connection;
 
-			$query  = "SELECT first_name, last_name FROM users WHERE user_id = $id;";
-			#print $query;
 			try {
-				$results = $sqlite_db_connection->query($query);
+				$stmt = $sqlite_db_connection->prepare( 'SELECT first_name, last_name FROM users WHERE user_id = :id;' );
+				$stmt->bindValue( ':id', $id, SQLITE3_INTEGER );
+				$results = $stmt->execute();
 			} catch (Exception $e) {
 				echo 'Caught exception: ' . $e->getMessage();
 				exit();
