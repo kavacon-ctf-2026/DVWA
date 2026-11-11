@@ -614,20 +614,179 @@ function dvwaGuestbook() {
 	$guestbook = '';
 
 	while( $row = mysqli_fetch_row( $result ) ) {
-		if( dvwaSecurityLevelGet() == 'impossible' ) {
-			$name    = htmlspecialchars( $row[0] );
-			$comment = htmlspecialchars( $row[1] );
-		}
-		else {
-			$name    = $row[0];
-			$comment = $row[1];
-		}
+		// Entries are user supplied: encode them on output at every security level.
+		$name    = htmlspecialchars( $row[0], ENT_QUOTES );
+		$comment = htmlspecialchars( $row[1], ENT_QUOTES );
 
 		$guestbook .= "<div id=\"guestbook_comments\">Name: {$name}<br />" . "Message: {$comment}<br /></div>\n";
 	}
 	return $guestbook;
 }
 // -- END (XSS Stored guestbook)
+
+
+// User lookup for the SQL Injection modules --
+function dvwaUserLookup( $id, $limitOne = false ) {  # Rows (first_name, last_name) for a numeric user id, using a bound parameter
+	global $_DVWA, $sqlite_db_connection;
+
+	if( !is_string( $id ) || !ctype_digit( $id ) ) {
+		return array();
+	}
+	$userId = intval( $id );
+	$query  = 'SELECT first_name, last_name FROM users WHERE user_id = ?' . ( $limitOne ? ' LIMIT 1' : '' ) . ';';
+	$rows   = array();
+
+	switch( $_DVWA[ 'SQLI_DB' ] ) {
+		case MYSQL:
+			$stmt = mysqli_prepare( $GLOBALS[ "___mysqli_ston" ], $query );
+			mysqli_stmt_bind_param( $stmt, 'i', $userId );
+			mysqli_stmt_execute( $stmt );
+			$result = mysqli_stmt_get_result( $stmt );
+			while( $row = mysqli_fetch_assoc( $result ) ) {
+				$rows[] = $row;
+			}
+			mysqli_stmt_close( $stmt );
+			break;
+		case SQLITE:
+			$stmt = $sqlite_db_connection->prepare( $query );
+			$stmt->bindValue( 1, $userId, SQLITE3_INTEGER );
+			$result = $stmt->execute();
+			while( $result && ( $row = $result->fetchArray( SQLITE3_ASSOC ) ) ) {
+				$rows[] = $row;
+			}
+			$stmt->close();
+			break;
+	}
+	return $rows;
+}
+// -- END (User lookup)
+
+
+// Ping for the Command Injection module --
+function dvwaPing( $target ) {  # Ping a literal IP address without a shell; false if the target is not an IP address
+	if( !is_string( $target ) ) {
+		return false;
+	}
+	$target = trim( $target );
+	if( filter_var( $target, FILTER_VALIDATE_IP ) === false ) {
+		return false;
+	}
+
+	// An argument array runs ping directly, so the target can never be parsed by a shell.
+	if( stristr( php_uname( 's' ), 'Windows NT' ) ) {
+		$command = array( 'ping', $target );
+	}
+	else {
+		$command = array( 'ping', '-c', '4', $target );
+	}
+	$process = proc_open( $command, array( 1 => array( 'pipe', 'w' ), 2 => array( 'pipe', 'w' ) ), $pipes );
+	if( !is_resource( $process ) ) {
+		return '';
+	}
+	$output = stream_get_contents( $pipes[ 1 ] ) . stream_get_contents( $pipes[ 2 ] );
+	fclose( $pipes[ 1 ] );
+	fclose( $pipes[ 2 ] );
+	proc_close( $process );
+	return $output;
+}
+// -- END (Ping)
+
+
+// Login for the Brute Force module --
+function dvwaBruteForceLogin( $user, $pass ) {  # Users row for valid credentials, or false; throttles repeated failures per account
+	global $db;
+
+	// After this many failures in a row an account is locked for the window below.
+	// The lock is kept in the database, so new sessions or cookies do not reset it.
+	$maxFailedLogins = 5;
+	$lockoutMinutes  = 15;
+
+	if( !is_string( $user ) || !is_string( $pass ) ) {
+		return false;
+	}
+
+	$data = $db->prepare( 'SELECT COALESCE( failed_login, 0 ) AS failed_login, ( last_login > NOW() - INTERVAL ' . $lockoutMinutes . ' MINUTE ) AS recent FROM users WHERE user = (:user) LIMIT 1;' );
+	$data->bindParam( ':user', $user, PDO::PARAM_STR );
+	$data->execute();
+	$account = $data->fetch();
+	if( $account === false ) {
+		return false;
+	}
+	if( $account[ 'failed_login' ] >= $maxFailedLogins ) {
+		if( $account[ 'recent' ] ) {
+			// Locked: refuse without checking the password, so guesses reveal nothing.
+			return false;
+		}
+		// The lockout window has passed: start counting again.
+		$data = $db->prepare( 'UPDATE users SET failed_login = 0 WHERE user = (:user) LIMIT 1;' );
+		$data->bindParam( ':user', $user, PDO::PARAM_STR );
+		$data->execute();
+	}
+
+	$hash = md5( $pass );
+	$data = $db->prepare( 'SELECT * FROM users WHERE user = (:user) AND password = (:password) LIMIT 1;' );
+	$data->bindParam( ':user', $user, PDO::PARAM_STR );
+	$data->bindParam( ':password', $hash, PDO::PARAM_STR );
+	$data->execute();
+	$row = $data->fetch();
+
+	if( $row !== false ) {
+		$data = $db->prepare( 'UPDATE users SET failed_login = 0 WHERE user = (:user) LIMIT 1;' );
+	}
+	else {
+		$data = $db->prepare( 'UPDATE users SET failed_login = COALESCE( failed_login, 0 ) + 1, last_login = NOW() WHERE user = (:user) LIMIT 1;' );
+	}
+	$data->bindParam( ':user', $user, PDO::PARAM_STR );
+	$data->execute();
+	return $row;
+}
+// -- END (Brute Force login)
+
+
+// Image storage for the File Upload module --
+function dvwaStoreUploadedImage( $file ) {  # Re-encode an uploaded JPEG or PNG under a random name; stored path, or false if rejected
+	$maxSize = 100000;
+
+	if( !is_array( $file ) || !isset( $file[ 'error' ], $file[ 'tmp_name' ], $file[ 'size' ], $file[ 'name' ] )
+		|| !is_string( $file[ 'name' ] ) || $file[ 'error' ] !== UPLOAD_ERR_OK || !is_uploaded_file( $file[ 'tmp_name' ] ) ) {
+		return false;
+	}
+	if( $file[ 'size' ] <= 0 || $file[ 'size' ] >= $maxSize ) {
+		return false;
+	}
+	// Only JPEG and PNG names are accepted, but the stored type comes from the content, not from the name or Content-Type.
+	$extension = strtolower( pathinfo( $file[ 'name' ], PATHINFO_EXTENSION ) );
+	if( !in_array( $extension, array( 'jpg', 'jpeg', 'png' ), true ) ) {
+		return false;
+	}
+	$info = @getimagesize( $file[ 'tmp_name' ] );
+	if( $info === false ) {
+		return false;
+	}
+	switch( $info[ 2 ] ) {
+		case IMAGETYPE_JPEG:
+			$image = @imagecreatefromjpeg( $file[ 'tmp_name' ] );
+			$storedExtension = 'jpg';
+			break;
+		case IMAGETYPE_PNG:
+			$image = @imagecreatefrompng( $file[ 'tmp_name' ] );
+			$storedExtension = 'png';
+			break;
+		default:
+			return false;
+	}
+	if( !$image ) {
+		return false;
+	}
+
+	// Re-encoding drops anything appended to or hidden in the image (such as PHP code),
+	// and the random name means the client never chooses the path or the extension.
+	$target = DVWA_WEB_PAGE_TO_ROOT . 'hackable/uploads/' . bin2hex( random_bytes( 16 ) ) . '.' . $storedExtension;
+	$stored = ( $storedExtension == 'jpg' ) ? imagejpeg( $image, $target, 90 ) : imagepng( $image, $target, 9 );
+	imagedestroy( $image );
+	return $stored ? $target : false;
+}
+// -- END (File Upload storage)
 
 
 // Token functions --
@@ -648,7 +807,9 @@ function generateSessionToken() {  # Generate a brand new (CSRF) token
 	if( isset( $_SESSION[ 'session_token' ] ) ) {
 		destroySessionToken();
 	}
-	$_SESSION[ 'session_token' ] = md5( uniqid() );
+	// Tokens must be unpredictable: md5( uniqid() ) is derived from the clock.
+	// 16 random bytes keep the 32 hex character format clients already expect.
+	$_SESSION[ 'session_token' ] = bin2hex( random_bytes( 16 ) );
 }
 
 function destroySessionToken() {  # Destroy any session with the name 'session_token'
