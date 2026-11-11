@@ -4,7 +4,11 @@ require ("token_library_high.php");
 
 $message = "";
 
-$token_data = create_token();
+try {
+	$token_data = create_token();
+} catch (Exception $e) {
+	$token_data = "";
+}
 
 $html = "
 	<script>

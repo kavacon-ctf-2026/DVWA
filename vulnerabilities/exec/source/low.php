@@ -2,20 +2,28 @@
 
 if( isset( $_POST[ 'Submit' ]  ) ) {
 	// Get input
-	$target = $_REQUEST[ 'ip' ];
+	$target = trim( (string)$_REQUEST[ 'ip' ] );
 
-	// Determine OS and execute the ping command.
-	if( stristr( php_uname( 's' ), 'Windows NT' ) ) {
-		// Windows
-		$cmd = shell_exec( 'ping  ' . $target );
+	// Allow only a well-formed IP address (allowlist), never shell metacharacters
+	if( filter_var( $target, FILTER_VALIDATE_IP ) !== false ) {
+		$target = escapeshellarg( $target );
+
+		// Determine OS and execute the ping command.
+		if( stristr( php_uname( 's' ), 'Windows NT' ) ) {
+			// Windows
+			$cmd = shell_exec( 'ping  ' . $target );
+		}
+		else {
+			// *nix
+			$cmd = shell_exec( 'ping  -c 4 ' . $target );
+		}
+
+		// Feedback for the end user
+		$html .= '<pre>' . htmlspecialchars( (string)$cmd ) . '</pre>';
 	}
 	else {
-		// *nix
-		$cmd = shell_exec( 'ping  -c 4 ' . $target );
+		$html .= '<pre>ERROR: You have entered an invalid IP.</pre>';
 	}
-
-	// Feedback for the end user
-	$html .= "<pre>{$cmd}</pre>";
 }
 
 ?>

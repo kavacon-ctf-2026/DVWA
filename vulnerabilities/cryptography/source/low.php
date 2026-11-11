@@ -13,7 +13,17 @@ function xor_this($cleartext, $key) {
     return $outText;
 }
 
-$key = "wachtwoord";
+// No hardcoded key: use a random, per-session secret key for the XOR tool.
+if (!isset ($_SESSION['crypto_low_key']) || !is_string ($_SESSION['crypto_low_key']) || strlen ($_SESSION['crypto_low_key']) != 32) {
+	$_SESSION['crypto_low_key'] = bin2hex (random_bytes (16));
+}
+$key = $_SESSION['crypto_low_key'];
+
+// The old password was sent under a reversible cipher with a hardcoded key, so it is
+// compromised and revoked. Logins are verified against a salted password hash supplied
+// by the deployment (DVWA_CRYPTO_LOW_PASSWORD_HASH, created with password_hash()),
+// never against a plaintext secret in the source. If none is configured, login is disabled.
+$password_hash = getenv ('DVWA_CRYPTO_LOW_PASSWORD_HASH');
 
 $errors = "";
 $success = "";
@@ -36,9 +46,8 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 			}
 		}
 		if (array_key_exists ('password', $_POST)) {
-			$password = $_POST['password'];
-			$decoded = xor_this (base64_decode ($password), $key);
-			if ($password == "Olifant") {
+			$password = (string) $_POST['password'];
+			if (is_string ($password_hash) && $password_hash !== "" && $password !== "Olifant" && password_verify ($password, $password_hash)) {
 				$success = "Welcome back user";
 			} else {
 				$errors = "Login Failed";

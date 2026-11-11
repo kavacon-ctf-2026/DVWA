@@ -2,7 +2,8 @@
 header("Content-Type: application/json; charset=UTF-8");
 
 if (array_key_exists ("callback", $_GET)) {
-	$callback = $_GET['callback'];
+	// Never reflect an attacker-chosen callback: only the known function may be called
+	$callback = "solveSum";
 } else {
 	return "";
 }

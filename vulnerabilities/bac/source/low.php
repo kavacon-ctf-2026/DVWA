@@ -4,7 +4,7 @@ if (!defined('DVWA_WEB_PAGE_TO_ROOT')) {
 }
 
 // Get current user's ID
-$query = "SELECT user_id, role FROM users WHERE user = '" . dvwaCurrentUser() . "';";
+$query = "SELECT user_id, role FROM users WHERE user = '" . mysqli_real_escape_string($GLOBALS["___mysqli_ston"], dvwaCurrentUser()) . "';";
 $result = mysqli_query($GLOBALS["___mysqli_ston"], $query);
 $row = ($result && mysqli_num_rows($result) > 0) ? mysqli_fetch_assoc($result) : array('user_id' => 0, 'role' => '');
 $current_user_id = intval($row['user_id']);
@@ -26,11 +26,10 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
         if (!$user_exists) {
             $html .= "<p>No user found with ID: {$id}</p>";
         } else {
-            // "Secure" check that's still vulnerable
-            if (isset($_COOKIE['user_id'])) {
-                $cookie_id = intval($_COOKIE['user_id']);
-                
-                if ($id == $cookie_id) {
+            // Authorisation is based on the server-side identity of the logged-in
+            // user (from the session), never on a client-controlled cookie
+            if ($current_user_id > 0) {
+                if ($id === $current_user_id) {
                     // Access granted
                     $query = "SELECT first_name, last_name, user_id, avatar FROM users WHERE user_id = $id;";
                     $result = mysqli_query($GLOBALS["___mysqli_ston"], $query);
@@ -43,14 +42,13 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
                                 <p>User ID: {$row['user_id']}</p>
                                 <p>Name: {$row['first_name']} {$row['last_name']}</p>
                                 <p>Avatar: {$row['avatar']}</p>
-                                <!-- Hint: Cookies can be modified by users... -->
                             </div>";
                     }
                 } else {
                     $html .= "<p>Access denied. You can only view your own profile.</p>";
                 }
             } else {
-                $html .= "<p>Access denied. No user_id cookie found.</p>";
+                $html .= "<p>Access denied. Unknown current user.</p>";
             }
         }
         
@@ -75,6 +73,7 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
             
             // Log the access attempt
             $ip = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR'];
+            $ip = mysqli_real_escape_string($GLOBALS["___mysqli_ston"], substr((string) $ip, 0, 50));
             $target_id = $user_exists ? $id : 0; // Use 0 for non-existent users
             $log_query = "INSERT INTO bac_log (user_id, target_id, ip_address) VALUES 
                         ({$current_user_id}, {$target_id}, '{$ip}')";

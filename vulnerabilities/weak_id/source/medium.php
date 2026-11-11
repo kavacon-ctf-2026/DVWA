@@ -3,7 +3,13 @@
 $html = "";
 
 if ($_SERVER['REQUEST_METHOD'] == "POST") {
-	$cookie_value = time();
-	setcookie("dvwaSession", $cookie_value);
+	// Unpredictable session identifier from a CSPRNG (not a counter, timestamp or hash of either)
+	$cookie_value = bin2hex(random_bytes(20));
+	setcookie("dvwaSession", $cookie_value, array(
+		'expires'  => time() + 3600,
+		'path'     => '/vulnerabilities/weak_id/',
+		'httponly' => true,
+		'samesite' => 'Strict'
+	));
 }
 ?>

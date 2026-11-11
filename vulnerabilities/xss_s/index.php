@@ -36,6 +36,25 @@ switch( dvwaSecurityLevelGet() ) {
 
 require_once DVWA_WEB_PAGE_TO_ROOT . "vulnerabilities/xss_s/source/{$vulnerabilityFile}";
 
+// Render the guestbook with output encoding on every level, so rows stored
+// unescaped (by any level, or before this fix) can never execute script.
+// Values are decoded first so rows already HTML-encoded on insert are not
+// double-encoded, then always re-encoded before output.
+function xssStoredSafeGuestbook() {
+	$query  = "SELECT name, comment FROM guestbook";
+	$result = mysqli_query($GLOBALS["___mysqli_ston"],  $query );
+
+	$guestbook = '';
+
+	while( $result && ( $row = mysqli_fetch_row( $result ) ) ) {
+		$name    = htmlspecialchars( htmlspecialchars_decode( (string) $row[0], ENT_QUOTES ), ENT_QUOTES, 'UTF-8' );
+		$comment = htmlspecialchars( htmlspecialchars_decode( (string) $row[1], ENT_QUOTES ), ENT_QUOTES, 'UTF-8' );
+
+		$guestbook .= "<div id=\"guestbook_comments\">Name: {$name}<br />" . "Message: {$comment}<br /></div>\n";
+	}
+	return $guestbook;
+}
+
 $page[ 'body' ] .= "
 <div class=\"body_padded\">
 	<h1>Vulnerability: Stored Cross Site Scripting (XSS)</h1>
@@ -69,7 +88,7 @@ $page[ 'body' ] .= "
 	</div>
 	<br />
 
-	" . dvwaGuestbook() . "
+	" . xssStoredSafeGuestbook() . "
 	<br />
 
 	<h2>More Information</h2>

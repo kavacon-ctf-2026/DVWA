@@ -36,11 +36,10 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
         if (!$user_exists) {
             $html .= "<p>No user found with ID: {$id}</p>";
         } else {
-            // "Secure" session-based check (but vulnerable to session fixation)
-            if (isset($_SESSION['user_id'])) {
-                $session_id = intval($_SESSION['user_id']);
-
-                if ($id == $session_id) {
+            // Authorisation is based on the identity of the currently authenticated
+            // user, looked up fresh on every request (no stale/fixated session value)
+            if ($current_user_id > 0) {
+                if ($id === $current_user_id) {
                     // Access granted - using prepared statement
                     $query = "SELECT first_name, last_name, user_id, avatar FROM users WHERE user_id = ?";
                     $stmt = mysqli_prepare($GLOBALS["___mysqli_ston"], $query);
@@ -65,7 +64,7 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
                     $html .= "<p>Access denied. You can only view your own profile.</p>";
                 }
             } else {
-                $html .= "<p>Access denied. No user_id in session.</p>";
+                $html .= "<p>Access denied. Unknown current user.</p>";
             }
         }
 
@@ -103,8 +102,6 @@ if (isset($_GET['action']) && isset($_GET['user_id'])) {
     }
 }
 
-// Set initial session if not exists
-if (!isset($_SESSION['user_id'])) {
-    $_SESSION['user_id'] = $current_user_id;
-}
+// Keep the session value in sync with the authenticated user (never trusted for authorisation)
+$_SESSION['user_id'] = $current_user_id;
 ?>

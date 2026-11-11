@@ -11,7 +11,7 @@ if( isset( $_POST[ 'btnSign' ] ) ) {
 	$message = htmlspecialchars( $message );
 
 	// Sanitize name input
-	$name = str_replace( '<script>', '', $name );
+	$name = htmlspecialchars( $name, ENT_QUOTES, 'UTF-8' );
 	$name = ((isset($GLOBALS["___mysqli_ston"]) && is_object($GLOBALS["___mysqli_ston"])) ? mysqli_real_escape_string($GLOBALS["___mysqli_ston"],  $name ) : ((trigger_error("[MySQLConverterToo] Fix the mysql_escape_string() call! This code does not work.", E_USER_ERROR)) ? "" : ""));
 
 	// Update database

@@ -4,14 +4,25 @@ if( isset( $_REQUEST[ 'Submit' ] ) ) {
 	// Get input
 	$id = $_REQUEST[ 'id' ];
 
-	switch ($_DVWA['SQLI_DB']) {
+	// Only accept a numeric user ID; anything else is rejected before touching the database
+	$db_engine = $_DVWA['SQLI_DB'];
+	if( !is_numeric( $id ) ) {
+		$db_engine = '';
+		$html .= '<pre>User ID must be a number.</pre>';
+	}
+	else {
+		$id = intval( $id );
+	}
+
+	switch ($db_engine) {
 		case MYSQL:
-			// Check database
-			$query  = "SELECT first_name, last_name FROM users WHERE user_id = '$id';";
-			$result = mysqli_query($GLOBALS["___mysqli_ston"],  $query ) or die( '<pre>' . ((is_object($GLOBALS["___mysqli_ston"])) ? mysqli_error($GLOBALS["___mysqli_ston"]) : (($___mysqli_res = mysqli_connect_error()) ? $___mysqli_res : false)) . '</pre>' );
+			// Check database using a prepared statement (parameterised query)
+			$data = $db->prepare( 'SELECT first_name, last_name FROM users WHERE user_id = (:id);' );
+			$data->bindParam( ':id', $id, PDO::PARAM_INT );
+			$data->execute();
 
 			// Get results
-			while( $row = mysqli_fetch_assoc( $result ) ) {
+			while( $row = $data->fetch( PDO::FETCH_ASSOC ) ) {
 				// Get values
 				$first = $row["first_name"];
 				$last  = $row["last_name"];
@@ -28,10 +39,10 @@ if( isset( $_REQUEST[ 'Submit' ] ) ) {
 			#$sqlite_db_connection = new SQLite3($_DVWA['SQLITE_DB']);
 			#$sqlite_db_connection->enableExceptions(true);
 
-			$query  = "SELECT first_name, last_name FROM users WHERE user_id = '$id';";
-			#print $query;
 			try {
-				$results = $sqlite_db_connection->query($query);
+				$stmt = $sqlite_db_connection->prepare( 'SELECT first_name, last_name FROM users WHERE user_id = :id;' );
+				$stmt->bindValue( ':id', $id, SQLITE3_INTEGER );
+				$results = $stmt->execute();
 			} catch (Exception $e) {
 				echo 'Caught exception: ' . $e->getMessage();
 				exit();

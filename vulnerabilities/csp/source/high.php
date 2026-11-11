@@ -7,7 +7,7 @@ header($headerCSP);
 <?php
 if (isset ($_POST['include'])) {
 $page[ 'body' ] .= "
-	" . $_POST['include'] . "
+	" . htmlspecialchars( (string) $_POST['include'], ENT_QUOTES, 'UTF-8' ) . "
 ";
 }
 $page[ 'body' ] .= '
