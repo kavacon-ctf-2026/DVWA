@@ -24,7 +24,10 @@ if( isset( $_POST[ 'Change' ] ) && ( $_POST[ 'step' ] == '1' ) ) {
 	else {
 		// CAPTCHA was correct. Do both new passwords match?
 		if( $pass_new == $pass_conf ) {
-			// Show next stage for the user
+			// Store in session that CAPTCHA was verified
+			$_SESSION['captcha_verified'] = true;
+			$_SESSION['captcha_pass_new'] = $pass_new;
+
 			$html .= "
 				<pre><br />You passed the CAPTCHA! Click the button to confirm your changes.<br /></pre>
 				<form action=\"#\" method=\"POST\">
@@ -46,25 +49,37 @@ if( isset( $_POST[ 'Change' ] ) && ( $_POST[ 'step' ] == '2' ) ) {
 	// Hide the CAPTCHA form
 	$hide_form = true;
 
+	// Verify CAPTCHA was actually passed in step 1 via session token
+	if( !isset( $_SESSION['captcha_verified'] ) || !$_SESSION['captcha_verified'] ) {
+		$html     .= "<pre><br />CAPTCHA verification required. Please complete step 1.</pre>";
+		$hide_form = false;
+		return;
+	}
+
 	// Get input
 	$pass_new  = $_POST[ 'password_new' ];
 	$pass_conf = $_POST[ 'password_conf' ];
 
-	// Check to see if both password match
+	// Verify passwords match what was validated in step 1
+	if( !isset( $_SESSION['captcha_pass_new'] ) || $pass_new !== $_SESSION['captcha_pass_new'] ) {
+		$html     .= "<pre><br />Invalid request.</pre>";
+		$hide_form = false;
+		unset( $_SESSION['captcha_verified'], $_SESSION['captcha_pass_new'] );
+		return;
+	}
+
+	// Check to see if both passwords match
 	if( $pass_new == $pass_conf ) {
-		// They do!
 		$pass_new = ((isset($GLOBALS["___mysqli_ston"]) && is_object($GLOBALS["___mysqli_ston"])) ? mysqli_real_escape_string($GLOBALS["___mysqli_ston"],  $pass_new ) : ((trigger_error("[MySQLConverterToo] Fix the mysql_escape_string() call! This code does not work.", E_USER_ERROR)) ? "" : ""));
 		$pass_new = md5( $pass_new );
 
-		// Update database
 		$insert = "UPDATE `users` SET password = '$pass_new' WHERE user = '" . dvwaCurrentUser() . "';";
 		$result = mysqli_query($GLOBALS["___mysqli_ston"],  $insert ) or die( '<pre>' . ((is_object($GLOBALS["___mysqli_ston"])) ? mysqli_error($GLOBALS["___mysqli_ston"]) : (($___mysqli_res = mysqli_connect_error()) ? $___mysqli_res : false)) . '</pre>' );
 
-		// Feedback for the end user
 		$html .= "<pre>Password Changed.</pre>";
+		unset( $_SESSION['captcha_verified'], $_SESSION['captcha_pass_new'] );
 	}
 	else {
-		// Issue with the passwords matching
 		$html .= "<pre>Passwords did not match.</pre>";
 		$hide_form = false;
 	}

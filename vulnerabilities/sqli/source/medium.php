@@ -4,7 +4,7 @@ if( isset( $_POST[ 'Submit' ] ) ) {
 	// Get input
 	$id = $_POST[ 'id' ];
 
-	$id = mysqli_real_escape_string($GLOBALS["___mysqli_ston"], $id);
+	$id = intval( $id );
 
 	switch ($_DVWA['SQLI_DB']) {
 		case MYSQL:

@@ -3,11 +3,12 @@
 // The page we wish to display
 $file = $_GET[ 'page' ];
 
-// Input validation
-if( !fnmatch( "file*", $file ) && $file != "include.php" ) {
-	// This isn't the page we want!
-	echo "ERROR: File not found!";
-	exit;
+// Whitelist: only allow known safe files
+$allowed = array( 'include.php', 'file1.php', 'file2.php', 'file3.php', 'file4.php' );
+
+if( !in_array( $file, $allowed ) ) {
+	$html .= '<pre>ERROR: File not found!</pre>';
+	$file = 'include.php';
 }
 
 ?>

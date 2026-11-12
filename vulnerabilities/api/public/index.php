@@ -40,6 +40,13 @@ $requestMethod = $_SERVER["REQUEST_METHOD"];
 
 $version = $local_uri[0];
 
+// Block legacy v1 API when security level is low or impossible (v1 leaks password hashes)
+$securityLevel = isset($_COOKIE['security']) ? $_COOKIE['security'] : 'impossible';
+if (($securityLevel === 'low' || $securityLevel === 'impossible') && $version === 'v1') {
+	header("HTTP/1.1 404 Not Found");
+	exit();
+}
+
 if (preg_match ("/v([0-9]*)/", $version, $matches)) {
 	$version = intval ($matches[1]);
 } else {

@@ -1,6 +1,12 @@
 <?php
 function decrypt ($ciphertext, $key) {
-	$e = openssl_decrypt($ciphertext, 'aes-128-ecb', $key, OPENSSL_PKCS1_PADDING);
+	// Use AES-CBC which prevents block-shuffling attacks unlike ECB
+	if (strlen($ciphertext) < 16) {
+		throw new Exception ("Decryption failed: ciphertext too short");
+	}
+	$iv = substr($ciphertext, 0, 16);
+	$ct = substr($ciphertext, 16);
+	$e = openssl_decrypt($ct, 'aes-128-cbc', $key, OPENSSL_RAW_DATA, $iv);
 	if ($e === false) {
 		throw new Exception ("Decryption failed");
 	}

@@ -2,7 +2,6 @@
 
 define ("KEY", "rainbowclimbinghigh");
 define ("ALGO", "aes-128-cbc");
-define ("IV", "1234567812345678");
 
 function encrypt ($plaintext, $iv) {
 	# Default padding is PKCS#7 which is interchangeable with PKCS#5
@@ -30,22 +29,21 @@ function decrypt ($ciphertext, $iv) {
 	return $e;
 }
 
-// Added the debug flag so that when calling from the script
-// the function can print the data used to create the token
-
 function create_token ($debug = false) {
 	$token = "userid:2";
+
+	// Generate a random IV per token so it cannot be predicted or reused
+	$iv = random_bytes(16);
 
 	if ($debug) {
 		print "Clear text token: " . $token . "\n";
 		print "Encryption key: " . KEY . "\n";
-		print "IV: " . (IV) . "\n";
 	}
 
-	$e = encrypt ($token, IV);
+	$e = encrypt ($token, $iv);
+	// Prepend IV to ciphertext – IV is not secret but must not be client-controlled separately
 	$data = array (
-					"token" => base64_encode ($e),
-					"iv" => base64_encode (IV)
+					"token" => base64_encode ($iv . $e)
 				);
 	return json_encode($data);
 }
@@ -81,24 +79,26 @@ function check_token ($data) {
 						);
 			return json_encode ($ret);
 		}
-		if (!array_key_exists ("iv", $data_array)) {
+
+		$token_decoded = base64_decode ($data_array['token']);
+		if (strlen ($token_decoded) < 17) {
 			$ret = array (
 							"status" => 524,
-							"message" => "Missing IV"
+							"message" => "Token too short to contain IV"
 						);
 			return json_encode ($ret);
 		}
-			
-		$ciphertext = base64_decode ($data_array['token']);
-		$iv = base64_decode ($data_array['iv']);
 
-		# Assume failure
+		// Extract IV from first 16 bytes – client cannot supply a separate IV
+		$iv         = substr ($token_decoded, 0, 16);
+		$ciphertext = substr ($token_decoded, 16);
+
 		$ret = array (
 						"status" => 500,
 						"message" => "Unknown error"
 					);
 		try {
-			$d = decrypt ($ciphertext, $iv); 
+			$d = decrypt ($ciphertext, $iv);
 			if (preg_match ("/^userid:(\d+)$/", $d, $matches)) {
 				$id = $matches[1];
 				if (array_key_exists ($id, $users)) {

@@ -40,22 +40,25 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 		if ($phrase == "success") {
 			switch( dvwaSecurityLevelGet() ) {
 				case 'low':
-					if ($token == md5(str_rot13("success"))) {
+					if (isset($_SESSION['js_challenge_token']) && hash_equals($_SESSION['js_challenge_token'], $token)) {
 						$message = "<p style='color:red'>Well done!</p>";
+						unset($_SESSION['js_challenge_token']);
 					} else {
 						$message = "<p>Invalid token.</p>";
 					}
 					break;
 				case 'medium':
-					if ($token == strrev("XXsuccessXX")) {
+					if (isset($_SESSION['js_challenge_token_medium']) && hash_equals($_SESSION['js_challenge_token_medium'], $token)) {
 						$message = "<p style='color:red'>Well done!</p>";
+						unset($_SESSION['js_challenge_token_medium']);
 					} else {
 						$message = "<p>Invalid token.</p>";
 					}
 					break;
 				case 'high':
-					if ($token == hash("sha256", hash("sha256", "XX" . strrev("success")) . "ZZ")) {
+					if (isset($_SESSION['js_challenge_token_high']) && hash_equals($_SESSION['js_challenge_token_high'], $token)) {
 						$message = "<p style='color:red'>Well done!</p>";
+						unset($_SESSION['js_challenge_token_high']);
 					} else {
 						$message = "<p>Invalid token.</p>";
 					}

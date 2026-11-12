@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] == "POST") {
 		if (array_key_exists ('password', $_POST)) {
 			$password = $_POST['password'];
 			$decoded = xor_this (base64_decode ($password), $key);
-			if ($password == "Olifant") {
+			if ($decoded == "Olifant") {
 				$success = "Welcome back user";
 			} else {
 				$errors = "Login Failed";

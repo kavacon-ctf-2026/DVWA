@@ -33,7 +33,7 @@ require_once DVWA_WEB_PAGE_TO_ROOT . "vulnerabilities/xss_d/source/{$vulnerabili
 
 # For the impossible level, don't decode the querystring
 $decodeURI = "decodeURI";
-if ($vulnerabilityFile == 'impossible.php') {
+if ($vulnerabilityFile == 'impossible.php' || $vulnerabilityFile == 'low.php' || $vulnerabilityFile == 'medium.php' || $vulnerabilityFile == 'high.php') {
 	$decodeURI = "";
 }
 
